@@ -1,151 +1,365 @@
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<base href="../../../" />
-		<script src="page.js"></script>
-		<link type="text/css" rel="stylesheet" href="page.css" />
-	</head>
-	<body>
-		<h1>[name]</h1>
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI; // For UI elements
 
-		<p>The goal of this section is to give a brief introduction to three.js. We will start by setting up a scene, with a spinning cube. A working example is provided at the bottom of the page in case you get stuck and need help.</p>
+public class CharacterAbilities : MonoBehaviour
+{
+    public float health = 100f;
+    public float damage = 10f;
+    public float swingSpeed = 10f;
+    public float venomStrikePower = 20f;
+    public float focusBar = 100f;
+    public float focusGainRate = 10f;
 
-		<h2>Before we start</h2>
+    private bool isSwinging = false;
+    private bool isVenomStriking = false;
 
-		<p>
-			If you haven't yet, go through the [link:#manual/introduction/Installation Installation] guide. We'll assume you've already set up the same project structure (including <i>index.html</i> and <i>main.js</i>), have installed three.js, and are either running a build tool, or using a local server with a CDN and import maps.
-		</p>
+    private string[] abilitySlots;
+    private Dictionary<int, float> abilityCooldowns = new Dictionary<int, float>();
+    private float abilityCooldownTime = 5f;
 
-		<h2>Creating the scene</h2>
+    public Text healthText;
+    public Text focusText;
 
-		<p>To actually be able to display anything with three.js, we need three things: scene, camera and renderer, so that we can render the scene with camera.</p>
+    public enum SuitType { Regular, Symbiote, AntiVenom, Miles, Venom }
+    public SuitType currentSuit = SuitType.Regular;
 
-		<p><i>main.js —</i></p>
+    void Start()
+    {
+        abilitySlots = new string[4]; // Initialize ability slots
+        UpdateAbilities();
+        UpdateUI();
+    }
 
-		<code>
-		import * as THREE from 'three';
+    void Update()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1 + i)) UseAbility(i);
+        }
+        if (Input.GetKeyDown(KeyCode.E)) UseFocus();
+    }
 
-		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+    void UpdateAbilities()
+    {
+        if (abilitySlots == null)
+            abilitySlots = new string[4];
 
-		const renderer = new THREE.WebGLRenderer();
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		document.body.appendChild( renderer.domElement );
-		</code>
+        switch (currentSuit)
+        {
+            case SuitType.Regular:
+                abilitySlots = new string[] { "Web Barrage", "Spider Reflex", "Web Slam", "Ultimate Swing" };
+                break;
+            case SuitType.Symbiote:
+                abilitySlots = new string[] { "Rage Punch", "Tendrils Whip", "Symbiote Surge", "Devour" };
+                break;
+            case SuitType.AntiVenom:
+                abilitySlots = new string[] { "Purge Blast", "Cleansing Strike", "Healing Touch", "Symbiote Surge" };
+                break;
+            case SuitType.Miles:
+                abilitySlots = new string[] { "Venom Punch", "Venom Dash", "Venom Blast", "Camouflage" };
+                break;
+            case SuitType.Venom:
+                abilitySlots = new string[] { "Tendril Slam", "Ravenous Bite", "Symbiote Surge", "Shadow Leap" };
+                break;
+        }
+    }
 
-		<p>Let's take a moment to explain what's going on here. We have now set up the scene, our camera and the renderer.</p>
+    void UseAbility(int slot)
+    {
+        if (slot < 0 || slot >= abilitySlots.Length || string.IsNullOrEmpty(abilitySlots[slot]))
+        {
+            Debug.LogWarning("Invalid ability slot selected!");
+            return;
+        }
+        if (abilityCooldowns.ContainsKey(slot) && Time.time < abilityCooldowns[slot])
+        {
+            Debug.LogWarning("Ability is on cooldown!");
+            return;
+        }
 
-		<p>There are a few different cameras in three.js. For now, let's use a `PerspectiveCamera`.</p>
+        abilityCooldowns[slot] = Time.time + abilityCooldownTime;
+        Debug.Log(abilitySlots[slot] + " activated!");
+    }
 
-		<p>The first attribute is the `field of view`. FOV is the extent of the scene that is seen on the display at any given moment. The value is in degrees.</p>
+    public void TakeDamage(float damageAmount)
+    {
+        health = Mathf.Max(health - damageAmount, 0);
+        Debug.Log($"Character took {damageAmount} damage. Health: {health}");
+        UpdateUI();
 
-		<p>The second one is the `aspect ratio`. You almost always want to use the width of the element divided by the height, or you'll get the same result as when you play old movies on a widescreen TV - the image looks squished.</p>
+        if (health <= 0)
+        {
+            Die();
+        }
+    }
 
-		<p>The next two attributes are the `near` and `far` clipping plane. What that means, is that objects further away from the camera than the value of `far` or closer than `near` won't be rendered. You don't have to worry about this now, but you may want to use other values in your apps to get better performance.</p>
+    public void GainFocus(float amount)
+    {
+        focusBar = Mathf.Clamp(focusBar + amount, 0, 100f);
+        Debug.Log($"Focus increased by {amount}. Current Focus: {focusBar}");
+        UpdateUI();
+    }
 
-		<p>Next up is the renderer. In addition to creating the renderer instance, we also need to set the size at which we want it to render our app. It's a good idea to use the width and height of the area we want to fill with our app - in this case, the width and height of the browser window. For performance intensive apps, you can also give `setSize` smaller values, like `window.innerWidth/2` and `window.innerHeight/2`, which will make the app render at quarter size.</p>
+    void UseFocus()
+    {
+        if (focusBar >= 50f)
+        {
+            focusBar -= 50f;
+            Heal(20f);
+            Debug.Log("Focus used to heal!");
+        }
+        else
+        {
+            Debug.Log("Not enough focus!");
+        }
+        UpdateUI();
+    }
 
-		<p>If you wish to keep the size of your app but render it at a lower resolution, you can do so by calling `setSize` with false as `updateStyle` (the third argument). For example, `setSize(window.innerWidth/2, window.innerHeight/2, false)` will render your app at half resolution, given that your &lt;canvas&gt; has 100% width and height.</p>
+    void Heal(float healAmount)
+    {
+        health = Mathf.Clamp(health + healAmount, 0, 100f);
+        Debug.Log($"Healed {healAmount} health. Current health: {health}");
+        UpdateUI();
+    }
 
-		<p>Last but not least, we add the `renderer` element to our HTML document. This is a &lt;canvas&gt; element the renderer uses to display the scene to us.</p>
+    void Die()
+    {
+        Debug.Log("Character is dead.");
+    }
 
-		<p><em>"That's all good, but where's that cube you promised?"</em> Let's add it now.</p>
+    void UpdateUI()
+    {
+        if (healthText != null) healthText.text = "Health: " + health;
+        if (focusText != null) focusText.text = "Focus: " + focusBar;
+    }
+}
 
-		<code>
-		const geometry = new THREE.BoxGeometry( 1, 1, 1 );
-		const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-		const cube = new THREE.Mesh( geometry, material );
-		scene.add( cube );
+// Boss Class
+public class Boss : MonoBehaviour
+{
+    public string bossName;
+    public float maxHealth = 1000f;
+    public float currentHealth;
+    public float damage = 50f;
+    public float transitionHealthThresholds[] = { 75f, 50f, 25f };
+    private int currentPhase = 0;
+    private float attackCooldown = 0f;
+    public GameObject deathEffectPrefab;
+    public Text bossHealthText;
+    private bool isSymbioteShedding = false;
 
-		camera.position.z = 5;
-		</code>
+    public enum BossType { Venom, Scream, PeterSymbiote }
+    public BossType bossType;
 
-		<p>To create a cube, we need a `BoxGeometry`. This is an object that contains all the points (`vertices`) and fill (`faces`) of the cube. We'll explore this more in the future.</p>
+    private void Start()
+    {
+        currentHealth = maxHealth;
+        UpdateUI();
+    }
 
-		<p>In addition to the geometry, we need a material to color it. Three.js comes with several materials, but we'll stick to the `MeshBasicMaterial` for now. All materials take an object of properties which will be applied to them. To keep things very simple, we only supply a color attribute of `0x00ff00`, which is green. This works the same way that colors work in CSS or Photoshop (`hex colors`).</p>
+    private void Update()
+    {
+        if (Time.time >= attackCooldown)
+        {
+            PerformAttack();
+        }
 
-		<p>The third thing we need is a `Mesh`. A mesh is an object that takes a geometry, and applies a material to it, which we then can insert to our scene, and move freely around.</p>
+        if (currentHealth <= transitionHealthThresholds[currentPhase] && currentPhase < 3)
+        {
+            TransitionToNextPhase();
+        }
 
-		<p>By default, when we call `scene.add()`, the thing we add will be added to the coordinates `(0,0,0)`. This would cause both the camera and the cube to be inside each other. To avoid this, we simply move the camera out a bit.</p>
+        if (isSymbioteShedding)
+        {
+            HandleSymbioteShedding();
+        }
 
-		<h2>Rendering the scene</h2>
+        UpdateUI();
+    }
 
-		<p>If you copied the code from above into the main.js file we created earlier, you wouldn't be able to see anything. This is because we're not actually rendering anything yet. For that, we need what's called a render or animation loop.</p>
+    void UpdateUI()
+    {
+        if (bossHealthText != null)
+            bossHealthText.text = $"{bossName} Health: {currentHealth}/{maxHealth}";
+    }
 
-		<code>
-		function animate() {
-			renderer.render( scene, camera );
-		}
-		renderer.setAnimationLoop( animate );
-		</code>
+    public void TakeDamage(float damageAmount)
+    {
+        currentHealth -= damageAmount;
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
 
-		<p>This will create a loop that causes the renderer to draw the scene every time the screen is refreshed (on a typical screen this means 60 times per second). If you're new to writing games in the browser, you might say <em>"why don't we just create a setInterval ?"</em> The thing is - we could, but `requestAnimationFrame` which is internally used in `WebGLRenderer` has a number of advantages. Perhaps the most important one is that it pauses when the user navigates to another browser tab, hence not wasting their precious processing power and battery life.</p>
+    void PerformAttack()
+    {
+        switch (bossType)
+        {
+            case BossType.Venom:
+                VenomAttack();
+                break;
+            case BossType.Scream:
+                ScreamAttack();
+                break;
+            case BossType.PeterSymbiote:
+                PeterSymbioteAttack();
+                break;
+        }
+        attackCooldown = Time.time + 3f;
+    }
 
-		<h2>Animating the cube</h2>
+    void VenomAttack()
+    {
+        switch (currentPhase)
+        {
+            case 0:
+                Debug.Log("Venom uses basic web attack!");
+                break;
+            case 1:
+                Debug.Log("Venom uses aggressive symbiote tendrils!");
+                break;
+            case 2:
+                Debug.Log("Venom summons symbiote minions!");
+                break;
+            case 3:
+                Debug.Log("Venom enters frenzy mode, using a devastating shockwave!");
+                break;
+        }
+    }
 
-		<p>If you insert all the code above into the file you created before we began, you should see a green box. Let's make it all a little more interesting by rotating it.</p>
+    void ScreamAttack()
+    {
+        switch (currentPhase)
+        {
+            case 0:
+                Debug.Log("Scream uses sonic scream!");
+                break;
+            case 1:
+                Debug.Log("Scream uses poison gas burst!");
+                break;
+            case 2:
+                Debug.Log("Scream summons symbiote creatures to fight!");
+                break;
+            case 3:
+                Debug.Log("Scream enrages and releases a scream shockwave!");
+                break;
+        }
+    }
 
-		<p>Add the following code right above the `renderer.render` call in your `animate` function:</p>
+    void PeterSymbioteAttack()
+    {
+        switch (currentPhase)
+        {
+            case 0:
+                Debug.Log("Peter Symbiote uses web barrage!");
+                break;
+            case 1:
+                Debug.Log("Peter Symbiote uses symbiote tendrils!");
+                break;
+            case 2:
+                Debug.Log("Peter Symbiote summons black symbiote clones!");
+                break;
+            case 3:
+                if (!isSymbioteShedding)
+                {
+                    Debug.Log("Peter is struggling with the symbiote... something is happening!");
+                    isSymbioteShedding = true;
+                }
+                break;
+        }
+    }
 
-		<code>
-		cube.rotation.x += 0.01;
-		cube.rotation.y += 0.01;
-		</code>
+    void TransitionToNextPhase()
+    {
+        currentPhase++;
+        Debug.Log($"{bossName} is transitioning to Phase {currentPhase + 1}!");
+        ApplyPhaseEffects();
+    }
 
-		<p>This will be run every frame (normally 60 times per second), and give the cube a nice rotation animation. Basically, anything you want to move or change while the app is running has to go through the animation loop. You can of course call other functions from there, so that you don't end up with an `animate` function that's hundreds of lines.</p>
+    void ApplyPhaseEffects()
+    {
+        switch (currentPhase)
+        {
+            case 1:
+                maxHealth *= 0.75f;
+                break;
+            case 2:
+                maxHealth *= 0.5f;
+                break;
+            case 3:
+                maxHealth *= 0.25f;
+                break;
+        }
 
-		<h2>The result</h2>
-		<p>Congratulations! You have now completed your first three.js application. It's simple, but you have to start somewhere.</p>
+        currentHealth = maxHealth;
+    }
 
-		<p>The full code is available below and as an editable [link:https://jsfiddle.net/tswh48fL/ live example]. Play around with it to get a better understanding of how it works.</p>
+    void HandleSymbioteShedding()
+    {
+        Debug.Log("Peter is ripping the symbiote off!");
+        currentPhase = 4;
+        isSymbioteShedding = false;
 
-		<p><i>index.html —</i></p>
+        maxHealth += 200f;
+        damage = 30f;
+        Debug.Log("Peter is back to his normal self, ready to fight!");
 
-		<code>
-		&lt;!DOCTYPE html&gt;
-		&lt;html lang="en"&gt;
-			&lt;head&gt;
-				&lt;meta charset="utf-8"&gt;
-				&lt;title&gt;My first three.js app&lt;/title&gt;
-				&lt;style&gt;
-					body { margin: 0; }
-				&lt;/style&gt;
-			&lt;/head&gt;
-			&lt;body&gt;
-				&lt;script type="module" src="/main.js"&gt;&lt;/script&gt;
-			&lt;/body&gt;
-		&lt;/html&gt;
-		</code>
+        ApplyPhaseEffects();
+    }
 
-		<p><i>main.js —</i></p>
+    void Die()
+    {
+        Debug.Log($"{bossName} is dead!");
+        if (deathEffectPrefab != null)
+        {
+            Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
+        }
+        Destroy(gameObject);
+    }
 
-		<code>
-		import * as THREE from 'three';
+    public bool IsAlive()
+    {
+        return currentHealth > 0;
+    }
+}
 
-		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+// Boss Manager for spawning and managing bosses
+public class BossManager : MonoBehaviour
+{
+    public GameObject venomBossPrefab;
+    public GameObject screamBossPrefab;
+    public GameObject peterSymbioteBossPrefab;
+    public Transform spawnLocation;
 
-		const renderer = new THREE.WebGLRenderer();
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		renderer.setAnimationLoop( animate );
-		document.body.appendChild( renderer.domElement );
+    private Boss currentBoss;
 
-		const geometry = new THREE.BoxGeometry( 1, 1, 1 );
-		const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-		const cube = new THREE.Mesh( geometry, material );
-		scene.add( cube );
+    public void StartBossFight(Boss.BossType bossType)
+    {
+        GameObject bossObject = null;
 
-		camera.position.z = 5;
+        switch (bossType)
+        {
+            case Boss.BossType.Venom:
+                bossObject = Instantiate(venomBossPrefab, spawnLocation.position, Quaternion.identity);
+                break;
+            case Boss.BossType.Scream:
+                bossObject = Instantiate(screamBossPrefab, spawnLocation.position, Quaternion.identity);
+                break;
+            case Boss.BossType.PeterSymbiote:
+                bossObject = Instantiate(peterSymbioteBossPrefab, spawnLocation.position, Quaternion.identity);
+                break;
+        }
 
-		function animate() {
+        if (bossObject != null)
+        {
+            currentBoss = bossObject.GetComponent<Boss>();
+            Debug.Log($"Boss fight started with {currentBoss.bossName}");
+        }
+    }
+}
 
-			cube.rotation.x += 0.01;
-			cube.rotation.y += 0.01;
 
-			renderer.render( scene, camera );
 
-		}
-		</code>
-	</body>
-</html>
